@@ -1,0 +1,230 @@
+create or replace and compile java source named "eu.solutions.a2.aurora.kafka.KafkaUtils" as
+/**
+ * Copyright (c) 2018-present, http://a2-solutions.eu
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+ * compliance with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is
+ * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See
+ * the License for the specific language governing permissions and limitations under the License.
+ */
+
+ package eu.solutions.a2.aurora.kafka;
+
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Properties;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+
+import oracle.jdbc.OracleArray;
+import oracle.jdbc.OracleStruct;
+
+public class KafkaUtils {
+
+	public static HashMap<String, Producer<String, String>> producersMap = new HashMap<String, Producer<String, String>>();
+
+	/**
+	 * Creates Kafka producer
+	 * 
+	 * @producerName name of Kafka producer
+	 * @propsFromPlSql array of tuples wirh producer properties
+	 *                 on PL/SQL side this should be A2_ARRAY_OF_TUPLES 
+	 * @return "SUCCESS" or stack trace as string
+	 */
+	public static String createProducer(String producerName, OracleArray propsFromPlSql) {		
+		String result = "SUCCESS";
+		try {
+			// Check for duplicate name
+			if (producersMap.containsKey(producerName)) {
+				throw new RuntimeException("Duplicate Kafka Producer Name!");
+			} else {
+				final Properties props = new Properties();
+				final Object[] tuples = (Object[]) propsFromPlSql.getArray();
+				for (int i= 0; i < tuples.length; i++) {
+					final OracleStruct pair = (OracleStruct) tuples[i];
+					props.put((String) pair.getAttributes()[0], (String) pair.getAttributes()[1]);
+				}
+				producersMap.put(producerName, new KafkaProducer<String, String>(props));
+			}
+		} catch (Exception e) {
+			result = e.getMessage();
+			for(int i=0; i<e.getStackTrace().length; i++) {
+				result += "\n\t\t" + e.getStackTrace()[i];
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Closes  Kafka producer and removes it from stored collection of producers
+	 * 
+	 * @producerName name of Kafka producer
+	 * @return "SUCCESS" or stack trace as string
+	 */
+	public static String closeProducer(String producerName) {		
+		String result = "SUCCESS";
+		try {
+			// Check for producer existence
+			if (!producersMap.containsKey(producerName)) {
+				throw new RuntimeException("Kafka Producer Name " + producerName + " not found!!!");
+			} else {
+				producersMap.get(producerName).close();
+				producersMap.remove(producerName);
+			}
+		} catch (Exception e) {
+			result = e.getMessage();
+			for(int i=0; i<e.getStackTrace().length; i++) {
+				result += "\n\t\t" + e.getStackTrace()[i];
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Sends string message using specified producerName and given topic
+	 * This procedure does not perform escaping!
+	 * 
+	 * @producerName name of Kafka producer
+	 * @topic name of topic
+	 * @key message key
+	 * @value message value
+	 * @return "SUCCESS" or stack trace as string
+	 */
+	public static String sendStringMessage(String producerName, String topic, String key, String value) {
+		String result = "SUCCESS";
+		try {
+			// Check for producer existence
+			if (!producersMap.containsKey(producerName)) {
+				throw new RuntimeException("Kafka Producer Name " + producerName + " not found!!!");
+			} else {
+				final ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+				// TODO - RecordMetadata analysis?
+				producersMap.get(producerName).send(record).get();
+			}
+		} catch (Exception e) {
+			result = e.getMessage();
+			for(int i=0; i<e.getStackTrace().length; i++) {
+				result += "\n\t\t" + e.getStackTrace()[i];
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Sends string message using specified producerName and given topic
+	 * Name-values pairs are escaped first.
+	 * 
+	 * @producerName name of Kafka producer
+	 * @topic name of topic
+	 * @key message key
+	 * @tuplesFromPlSql array of key-value pair
+	 * @return "SUCCESS" or stack trace as string
+	 */
+	public static String sendJsonMessage(String producerName, String topic, String key, OracleArray tuplesFromPlSql) {
+		String result = "SUCCESS";
+		try {
+			// Check for producer existence
+			if (!producersMap.containsKey(producerName)) {
+				throw new RuntimeException("Kafka Producer Name " + producerName + " not found!!!");
+			} else {
+				String value = toJsonString(tuplesFromPlSql);
+				final ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+				// TODO - RecordMetadata analysis?
+				producersMap.get(producerName).send(record).get();
+			}
+		} catch (Exception e) {
+			result = e.getMessage();
+			for(int i=0; i<e.getStackTrace().length; i++) {
+				result += "\n\t\t" + e.getStackTrace()[i];
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * 
+	 * @param tuplesFromPlSql key-value pairs of String i.e. varchar2 types
+	 * @return Jsonified string presentation of key-value pairs
+	 * @throws SQLException
+	 */
+	public static String toJsonString(OracleArray tuplesFromPlSql) throws SQLException {
+		if (tuplesFromPlSql == null || tuplesFromPlSql.length() == 0) {
+			return "{}";
+		}
+		StringBuilder sb = new StringBuilder(tuplesFromPlSql.length() * 5);
+		sb.append('{');
+		final Object[] tuples = (Object[]) tuplesFromPlSql.getArray();
+		for (int i= 0; i < tuples.length; i++) {
+			final OracleStruct pair = (OracleStruct) tuples[i];
+			if (pair == null) {
+				sb.append(quote(null));
+				sb.append(':');
+				sb.append(quote(null));
+			} else {
+				sb.append(quote((String) pair.getAttributes()[0]));
+				sb.append(':');
+				sb.append(quote((String) pair.getAttributes()[1]));
+			}
+			if (i < tuples.length - 1) {
+				sb.append(',');
+			}
+		}
+		sb.append('}');
+		return sb.toString();
+	}
+
+	private static String quote(final String string) {
+		if (string == null || string.length() == 0) {
+			return "\"\"";
+		}
+		int len = string.length();
+		StringBuilder sb = new StringBuilder(len + 4);
+
+		sb.append('"');
+		for (int i = 0; i < len; i++) {
+			char c = string.charAt(i);
+			switch (c) {
+			case '\\':
+			case '"':
+			case '/':
+				sb.append('\\');
+				sb.append(c);
+				break;
+			case '\b':
+				sb.append("\\b");
+				break;
+			case '\t':
+				sb.append("\\t");
+				break;
+			case '\n':
+				sb.append("\\n");
+				break;
+			case '\f':
+				sb.append("\\f");
+				 break;
+			case '\r':
+				sb.append("\\r");
+				break;
+			default:
+				if (c < ' ') {
+					final String t = "000" + Integer.toHexString(c);
+					sb.append("\\u" + t.substring(t.length() - 4));
+				} else {
+					sb.append(c);
+				}
+			}
+		}
+		
+		sb.append('"');
+		return sb.toString();
+	}
+
+};
+/
+ 

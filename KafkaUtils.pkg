@@ -1,0 +1,24 @@
+create or replace package A2_KAFKA_UTILS as
+
+	function CREATE_PRODUCER(PRODUCER_NAME in varchar2, PRODUCER_PROPS in A2_ARRAY_OF_TUPLES) return varchar2
+		as language java name
+			'eu.solutions.a2.aurora.kafka.KafkaUtils.createProducer(java.lang.String,oracle.jdbc.OracleArray) return java.lang.String';
+
+	function CLOSE_PRODUCER(PRODUCER_NAME in varchar2) return varchar2
+		as language java name
+			'eu.solutions.a2.aurora.kafka.KafkaUtils.closeProducer(java.lang.String) return java.lang.String';
+
+	function SEND_STRING_MESSAGE(PRODUCER_NAME in varchar2, TOPIC varchar2, MSG_KEY in varchar2, MSG_VALUE in varchar2) return varchar2
+		as language java name
+			'eu.solutions.a2.aurora.kafka.KafkaUtils.sendStringMessage(java.lang.String,java.lang.String,java.lang.String,java.lang.String) return java.lang.String';
+
+	function SEND_JSON_MESSAGE(PRODUCER_NAME in varchar2, TOPIC varchar2, MSG_KEY in varchar2, ARRAY_OF_VALUES in A2_ARRAY_OF_TUPLES) return varchar2
+		as language java name
+			'eu.solutions.a2.aurora.kafka.KafkaUtils.sendJsonMessage(java.lang.String,java.lang.String,java.lang.String,oracle.jdbc.OracleArray) return java.lang.String';
+
+	function ARRAY_2_JSON(ARRAY_OF_VALUES in A2_ARRAY_OF_TUPLES) return varchar2
+		as language java name
+			'eu.solutions.a2.aurora.kafka.KafkaUtils.toJsonString(oracle.jdbc.OracleArray) return java.lang.String';
+
+end A2_KAFKA_UTILS;
+/
