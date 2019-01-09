@@ -4,7 +4,7 @@
 
 ## Getting Started
 
-For installation and usage instructions please read <LINK-WILL-BE-SUPPLIED-LATER>.
+For installation and usage instructions please read [Oracle to Kafka made easy](https://oebsnotes.blogspot.com/2019/01/oracle-to-kafka-made-easy.html).
 
 ## License
 
